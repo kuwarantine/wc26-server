@@ -6,7 +6,7 @@ import cors from 'cors';
 const corsOptions = {
     origin: ['http://localhost:5173', process.env.FRONTEND_URL],
     credentials: true,
-    optionSuccessStatus: 200,
+    optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 

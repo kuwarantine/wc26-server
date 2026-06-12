@@ -1,6 +1,10 @@
 import postgres from 'postgres';
 
-const sql = postgres(process.env.DATABASE_URL);
+const sql = postgres(process.env.DATABASE_URL, {
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
 // Generic function to insert data to DB
 export async function insertData(table, data, ignoreConflicts = false ) {
