@@ -1,9 +1,15 @@
-import pg from 'pg';
-const { Pool } = pg;
-const connectionString = process.env.DATABASE_URL;
+import postgres from 'postgres';
 
-const pool = new Pool({
-    connectionString,
-})
+const sql = postgres(process.env.DATABASE_URL);
 
-export { pool };
+// Generic function to insert data to DB
+export async function insertData(table, data, ignoreConflicts = false ) {
+    try {
+        await sql`INSERT INTO ${ sql(table) } ${ sql(data) }
+                  ${ ignoreConflicts ? sql`ON CONFLICT DO NOTHING` : sql`` }`;
+    } catch (err) {
+        console.error(`Inserting into ${table} failed:`, err.message);
+    }
+}
+
+export default sql;

@@ -1,9 +1,9 @@
-import { pool } from './db.js';
+import sql from './db.js';
 
 async function getGroups(req, res) {
     try {
-        const data = await pool.query('SELECT id, position, emoji, country, groupid, won, drawn, lost, goals_for, goals_against FROM teams ORDER BY position;');
-        res.json(data.rows);
+        const data = await sql`SELECT id, position, emoji, country, groupid, won, drawn, lost, goals_for, goals_against FROM teams ORDER BY position;`;
+        res.json(data);
     } catch (err) {
         console.error(err);
     }
@@ -11,15 +11,14 @@ async function getGroups(req, res) {
 
 async function getKnockoutMatches(req, res) {
     try {
-        const data = await pool.query(`SELECT * FROM matches WHERE round > 1;`);
-        const rows = data.rows;
+        const rows = await sql`SELECT * FROM matches WHERE round > 1;`;
         const matches = {};
 
-        for (let row of rows) {
-            const homeData = await pool.query(`SELECT country, emoji FROM teams WHERE id = ${row.home_id};`);
-            const home = homeData.rows[0];
-            const awayData = await pool.query(`SELECT country, emoji FROM teams WHERE id = ${row.away_id};`);
-            const away = awayData.rows[0];
+        for (const row of rows) {
+            const homeData = await sql`SELECT country, emoji FROM teams WHERE id = ${row.home_id};`;
+            const home = homeData[0];
+            const awayData = await sql`SELECT country, emoji FROM teams WHERE id = ${row.away_id};`;
+            const away = awayData[0];
 
             const match = {
                     date: row.timestamp.valueOf(),
@@ -48,19 +47,16 @@ async function getKnockoutMatches(req, res) {
 async function getMatch(req, res) {
     const dq = req.query.date;
     try {
-        const data = await pool.query(`SELECT * FROM matches WHERE date(timestamp) = '${dq}' ORDER BY timestamp;`);
-        const rows = data.rows;
+        const rows = await sql`SELECT * FROM matches WHERE date(timestamp) = ${dq} ORDER BY timestamp;`;
         const matches = [];
 
-        for (let row of rows) {
-            const homeData = await pool.query(`SELECT country, emoji FROM teams WHERE id = ${row.home_id};`);
-            const home = homeData.rows[0];
-            const awayData = await pool.query(`SELECT country, emoji FROM teams WHERE id = ${row.away_id};`);
-            const away = awayData.rows[0];
-            const homeEventsData = await pool.query(`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.home_id} ORDER BY time, extra_time NULLS FIRST;`);
-            const homeEvents = homeEventsData.rows;
-            const awayEventsData = await pool.query(`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.away_id} ORDER BY time, extra_time NULLS FIRST;`);
-            const awayEvents = awayEventsData.rows;
+        for (const row of rows) {
+            const homeData = await sql`SELECT country, emoji FROM teams WHERE id = ${row.home_id};`;
+            const home = homeData[0];
+            const awayData = await sql`SELECT country, emoji FROM teams WHERE id = ${row.away_id};`;
+            const away = awayData[0];
+            const homeEvents = await sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.home_id} ORDER BY time, extra_time NULLS FIRST;`;
+            const awayEvents = await sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.away_id} ORDER BY time, extra_time NULLS FIRST;`;
 
             const match = {
                 date: row.timestamp.valueOf(),
@@ -85,8 +81,8 @@ async function getMatch(req, res) {
 
 async function getStandings(req, res) {
     try {
-        const data = await pool.query('SELECT name, points FROM users ORDER BY points DESC, name;');
-        res.json(data.rows);
+        const rows = await sql`SELECT name, points FROM users ORDER BY points DESC, name;`;
+        res.json(rows);
     } catch (err) {
         console.error(err);
     }
