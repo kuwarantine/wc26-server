@@ -1,9 +1,8 @@
 import postgres from 'postgres';
 
+const isProd = process.env.NODE_ENV === 'production';
 const sql = postgres(process.env.DATABASE_URL, {
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: isProd ? { rejectUnauthorized: false } : false
 });
 
 // Generic function to insert data to DB

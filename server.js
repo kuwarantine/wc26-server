@@ -20,6 +20,8 @@ app.get('/api/match', requests.getMatch);
 
 app.get('/api/match/knockouts', requests.getKnockoutMatches);
 
+app.get('/api/last', requests.getLastMatch);
+
 app.listen(port, () => {
     console.log(`App listening on port ${port}`)
 });

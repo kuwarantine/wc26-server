@@ -103,12 +103,13 @@ function parseFixture(match) {
     const away_id = match.teams.away.id;
     const round = roundIDFromString(match.league.round);
     const complete = match.fixture.status.long === 'Match Finished';
+    const in_ft = match.fixture.status.short === 'FT'
 
     if (complete) {
         const home_score = match.score.fulltime.home;
         const away_score = match.score.fulltime.away;
-        const home_et = match.score.extratime.home ? (match.score.extratime.home + home_score) : null;
-        const away_et = match.score.extratime.away ? (match.score.extratime.away + away_score) : null;
+        const home_et = in_ft ? null : (home_score + (match.score.extratime.home ?? 0));
+        const away_et = in_ft ? null : (away_score + (match.score.extratime.away ?? 0));
         const home_pen = match.score.penalty.home;
         const away_pen = match.score.penalty.away;
         const finish_code = match.fixture.status.short;
