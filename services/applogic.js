@@ -91,7 +91,7 @@ function winnerIDFromFixture(home_id, home_win, away_id, away_win) {
     } else if (away_win) {
         return away_id;
     } else {
-        return 0;
+        return null;
     }
 }
 
@@ -252,6 +252,74 @@ async function calculatePointsForKnockoutMatch(match) {
     }
 }
 
+export async function recalculatePointsForComplete2() {
+    const matches = await sql`SELECT id, round FROM matches WHERE complete = TRUE;`;
+    await calculatePointsForMatch2(matches);
+}
+
+async function calculatePointsForKnockoutMatch2(match_ids) {
+    if (match_ids.length === 0) { return; }
+    try {
+        await sql`UPDATE picks p 
+                    SET 
+                        winner_points = r.winner_points,
+                        score_points = CASE
+                            WHEN p.finish_code != m.finish_code THEN 0
+
+                            WHEN p.home_score = m.home_score AND p.away_score = m.away_score AND (
+                                (p.finish_code = 'FT') OR
+                                (p.finish_code = 'AET' AND p.home_et = m.home_et AND p.away_et = m.away_et) OR
+                                (p.finish_code = 'PEN' AND p.home_et = m.home_et AND p.away_et = m.away_et AND p.home_pen = m.home_pen AND p.away_pen = m.away_pen)
+                            ) THEN r.score_points
+                            
+                            WHEN p.home_score = m.away_score AND p.away_score = m.home_score AND (
+                                (p.finish_code = 'FT') OR
+                                (p.finish_code = 'AET' AND p.home_et = m.away_et AND p.away_et = m.home_et) OR
+                                (p.finish_code = 'PEN' AND p.home_et = m.away_et AND p.away_et = m.home_et AND p.home_pen = m.away_pen AND p.away_pen = m.home_pen)
+                            ) THEN r.score_points
+
+                            ELSE 0
+                        END
+                    FROM matches m
+                    JOIN rounds r ON m.round = r.id
+                    WHERE m.id = ANY(${match_ids}) AND p.winner_id = m.winner_id AND p.round = m.round;`;
+    } catch(err) {
+        console.error(err);
+    }
+}
+
+async function calculatePointsForGroupMatch2(match_ids) {
+    if (match_ids.length === 0) { return; }
+    try {
+        await sql`UPDATE picks p 
+                    SET 
+                        winner_points = CASE
+                            WHEN (p.winner_id = m.winner_id) OR (p.winner_id IS NULL AND m.winner_id IS NULL)
+                            THEN r.winner_points
+                            ELSE 0
+                        END,
+                        
+                        score_points = CASE
+                            WHEN p.home_score = m.home_score AND p.away_score = m.away_score
+                            THEN r.score_points
+                            ELSE 0
+                        END
+                    FROM matches m
+                    JOIN rounds r ON m.round = r.id
+                    WHERE p.match_id = m.id AND m.id = ANY(${match_ids});`;
+    } catch(err) {
+        console.error(err);
+    }
+}
+
+async function calculatePointsForMatch2(matches) {
+    const groupIds = matches.filter((m) => m.round === 1).map((m) => m.id);
+    const knockoutIds = matches.filter((m) => m.round > 1).map((m) => m.id);
+
+    await calculatePointsForGroupMatch2(groupIds);
+    await calculatePointsForKnockoutMatch2(knockoutIds);
+}
+
 // Checks the points each user got from the match and returns a map of user id to points
 async function calculatePointsForGroupMatch(match) {
     try {
@@ -377,18 +445,29 @@ export async function pushPointsForUsers(new_points, match_ids) {
 
         
         await sql`UPDATE users SET points = (np.points)::int FROM (VALUES ${sql(usersArray)}) as np (id, points) WHERE users.id = (np.id)::int`;
-        if (match_ids.length > 0) { await sql`UPDATE matches SET parsed = TRUE WHERE id IN ${sql(match_ids)};`; }
+        if (match_ids.length > 0) { await sql`UPDATE matches SET parsed = TRUE WHERE id = ANY(${match_ids});`; }
     } catch(err) {
         console.error(err);
     }
 }
 
-// Check any fixtures that we haven't pulled and push to DB if complete, also update standings, defaults to knockout
-export async function updateFixtures() {
+async function updateFixtures2() {
     const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
     const ids = matches.map((m) => m.id);
-    const completedMatchIds = await updateForMatchesIfComplete(ids);
-    if (completedMatchIds.length > 0) {
+    const completedMatches = await updateForMatchesIfComplete(ids);
+    if (completedMatches.length > 0) {
+        await calculatePointsForMatch2(completedMatches);
+        console.log(`Updated for ${completedMatches.length} matches: ${completedMatches.map((m) => m.id)}.`)
+    }
+}
+
+// Check any fixtures that we haven't pulled and push to DB if complete, also update standings, defaults to knockout
+export async function updateFixturesOld() {
+    const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
+    const ids = matches.map((m) => m.id);
+    const completedMatches = await updateForMatchesIfComplete(ids);
+    if (completedMatches.length > 0) {
+        const completedMatchIds = completedMatches.map((m) => m.id);
         const new_points = await calculatePointsForMatches(completedMatchIds);
         await pushPointsForUsers(new_points, completedMatchIds);
         console.log(`Updated for ${completedMatchIds.length} matches: ${completedMatchIds.toString()}.`);
@@ -399,27 +478,44 @@ export async function updateFixtures() {
     
 }
 
-// Fetches matches, checks if they are complete, and if so pushes matches/events for complete, and return completed match count
+export async function updateFixtures() {
+    const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
+    const ids = matches.map((m) => m.id);
+    const completedMatches = await updateForMatchesIfComplete(ids);
+    if (completedMatches.length > 0) {
+        const completedMatchIds = completedMatches.map((m) => m.id);
+        const new_points = await calculatePointsForMatches(completedMatchIds);
+        await pushPointsForUsers(new_points, completedMatchIds);
+
+        await calculatePointsForMatch2(completedMatches);
+        console.log(`Updated for ${completedMatches.length} matches: ${completedMatches.map((m) => m.id)}.`);
+        await updateStandings();
+    } else {
+        console.log(`No matches ready for update.`);
+    }
+}
+
+// Fetches matches, checks if they are complete, and if so pushes matches/events for complete, and return completed match IDs + rounds
 async function updateForMatchesIfComplete(ids) {
     const fixturesJSON = await fetchMultipleFixtures(ids);
     const matches = [];
     let events = [];
-    const completedMatchIds = [];
+    const completedMatches = [];
     for (const match of fixturesJSON.response) {
         const m = parseFixture(match);
         if (m.complete) {
-            completedMatchIds.push(m.id);
+            completedMatches.push({id: m.id, round: m.round});
             matches.push(m);
             const e = parseEvents(m.id, match.events);
             events = events.concat(e);
         }
     }
-    if (completedMatchIds.length > 0) {
+    if (completedMatches.length > 0) {
         await pushMatchData(matches);
         await insertData('events', events);
     }
 
-    return completedMatchIds;
+    return completedMatches;
 }
 
 // Fetches, parses, and pushes standings to DB
@@ -433,11 +529,18 @@ async function updateStandings() {
 
 // Fetches, parses, and pushes new fixtures to DB by round
 export async function getNewFixturesForRound(round) {
+    const existingRows = await sql`SELECT id FROM matches WHERE round = ${round}`;
+    const existingIds = new Set(existingRows.map((m) => m.id));
+
     const fixturesJSON = await fetchFixturesForRound(round);
     const matches = [];
     for (const match of fixturesJSON.response) {
+        if (existingIds.has(match.fixture.id)) { continue; }
         const m = parseFixture(match);
         matches.push(m);
     }
-    await insertData('matches', matches, true);
+    if (matches.length > 0) {
+        await insertData('matches', matches, true);
+        console.log(`Added ${matches.count} new fixtures.`);
+    }
 }

@@ -90,7 +90,7 @@ async function getMatch(req, res) {
 
 async function getStandings(req, res) {
     try {
-        const rows = await sql`SELECT name, points FROM users ORDER BY points DESC, name;`;
+        const rows = await sql`SELECT name, points, last_match_points FROM leaderboard ORDER BY points DESC, name;`;
         res.json(rows);
     } catch (err) {
         console.error(err);
@@ -99,7 +99,7 @@ async function getStandings(req, res) {
 
 async function getLastMatch(req, res) {
     try {
-        const lastData = await sql`SELECT * FROM matches WHERE parsed = true ORDER BY timestamp DESC LIMIT 1;`;
+        const lastData = await sql`SELECT * FROM matches WHERE complete = TRUE ORDER BY timestamp DESC LIMIT 1;`;
         const last = lastData[0];
         const home_id = last.home_id;
         const away_id = last.away_id;
