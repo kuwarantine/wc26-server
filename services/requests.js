@@ -47,9 +47,14 @@ async function getKnockoutMatches(req, res) {
 }
 
 async function getMatch(req, res) {
-    const dq = req.query.date;
+    const date = req.query.date;
+    const zone = req.query.zone;
     try {
-        const rows = await sql`SELECT * FROM matches WHERE date(timestamp) = ${dq} ORDER BY timestamp;`;
+        const plainDate = Temporal.PlainDate.from(date);
+        const startUTC = plainDate.toZonedDateTime(zone).startOfDay().toInstant().toString();
+        const endtUTC = plainDate.toZonedDateTime(zone).startOfDay().add({days:1}).toInstant().toString();
+
+        const rows = await sql`SELECT * FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endtUTC} ORDER BY timestamp;`;
         const matches = [];
 
         for (const row of rows) {
