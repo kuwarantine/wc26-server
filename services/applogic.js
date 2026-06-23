@@ -253,7 +253,7 @@ async function scheduleMatch(id, timestamp) {
 
 export async function scheduleIncompleteMatches() {
     const matches = await sql`SELECT id, timestamp FROM matches WHERE complete = FALSE`;
-    const successful = 0;
+    let successful = 0;
 
     for (const match of matches) {
         const kickoff = match.timestamp.toTemporalInstant();
