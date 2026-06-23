@@ -1,16 +1,21 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "engines": {
     "node": "26.x"
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --env-file=.env server.js",
+    "worker": "node worker.js",
+    "dev:web": "node --env-file=.env server.js",
+    "dev:worker": "node --env-file=.env worker.js",
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:worker\"",
     "check_fixtures": "node --env-file=.env scripts/check_fixtures.js",
     "new_fixtures": "node --env-file=.env scripts/new_fixtures.js",
     "recalculate_points": "node --env-file=.env scripts/recalculate_points.js",
+    "schedule_matches": "node --env-file=.env scripts/schedule_matches.js",
+    "dashboard": "npx --env-file=.env pg-boss-dashboard",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "type": "module",
@@ -23,6 +28,11 @@
     "express": "^5.2.1",
     "papaparse": "^5.5.3",
     "pg": "^8.21.0",
+    "pg-boss": "^12.20.0",
     "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@pg-boss/dashboard": "^1.2.1",
+    "concurrently": "^10.0.3"
   }
 }

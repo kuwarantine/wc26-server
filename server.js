@@ -10,17 +10,17 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-import * as requests from './services/requests.js';
+import * as controllers from './services/controllers.js';
 
-app.get('/api/groups', requests.getGroups);
+app.get('/api/groups', controllers.getGroups);
 
-app.get('/api/standings', requests.getStandings);
+app.get('/api/standings', controllers.getStandings);
 
-app.get('/api/match', requests.getMatch);
+app.get('/api/match', controllers.getMatch);
 
-app.get('/api/match/knockouts', requests.getKnockoutMatches);
+app.get('/api/match/knockouts', controllers.getKnockoutMatches);
 
-app.get('/api/last', requests.getLastMatch);
+app.get('/api/last', controllers.getLastMatch);
 
 app.listen(port, () => {
     console.log(`App listening on port ${port}`)

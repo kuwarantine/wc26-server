@@ -9,7 +9,7 @@ const hrs = now.getUTCHours();*/
 try {
     await updateFixtures();
 } catch (err) {
-    console.error('Script failed:', err.messsage); 
+    console.error('Script failed:', err.message); 
 } finally {
     await sql.end();
 }

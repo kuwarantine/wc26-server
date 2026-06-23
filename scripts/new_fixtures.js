@@ -7,7 +7,7 @@ const round = args[2];
 try {
     await getNewFixturesForRound(round);
 } catch (err) {
-    console.error('Script failed:', err.messsage); 
+    console.error('Script failed:', err.message); 
 } finally {
     await sql.end();
 }
