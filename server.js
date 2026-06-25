@@ -22,6 +22,8 @@ app.get('/api/match/knockouts', controllers.getKnockoutMatches);
 
 app.get('/api/last', controllers.getLastMatch);
 
+app.get('/api/picks', controllers.getPicks);
+
 app.listen(port, () => {
     console.log(`App listening on port ${port}`)
 });

@@ -52,9 +52,9 @@ async function getMatch(req, res) {
     try {
         const plainDate = Temporal.PlainDate.from(date);
         const startUTC = plainDate.toZonedDateTime(zone).startOfDay().toInstant().toString();
-        const endtUTC = plainDate.toZonedDateTime(zone).startOfDay().add({days:1}).toInstant().toString();
+        const endUTC = plainDate.toZonedDateTime(zone).startOfDay().add({days:1}).toInstant().toString();
 
-        const rows = await sql`SELECT * FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endtUTC} ORDER BY timestamp;`;
+        const rows = await sql`SELECT * FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endUTC} ORDER BY timestamp;`;
         const matches = [];
 
         for (const row of rows) {
@@ -141,4 +141,32 @@ async function getLastMatch(req, res) {
     }
 }
 
-export { getGroups, getMatch, getStandings, getKnockoutMatches, getLastMatch };
+async function getPicks(req, res) {
+    const date = req.query.date;
+    const zone = req.query.zone;
+    try {
+        const startUTC = Temporal.Now.plainDateISO('UTC')
+                        .toZonedDateTime({timeZone: 'UTC', plainTime: '08:00'}).toInstant().toString();
+        const endUTC = Temporal.Now.plainDateISO('UTC')
+                        .toZonedDateTime({timeZone: 'UTC', plainTime: '08:00'}).add({days: 1}).toInstant().toString();
+
+        const rows = await sql`SELECT id, home_id, away_id FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endUTC} ORDER BY timestamp;`;
+        const ids = rows.map((r) => r.id);
+        const picks = await sql`SELECT u.name, p.match_id, p.winner_id, p.home_score, p.away_score, p.home_et, p.away_et, p.home_pen, p.away_pen
+                                FROM users u JOIN picks p ON u.id = p.user_id WHERE p.match_id = ANY(${ids})`;
+        const grouped = Object.groupBy([...picks], (p) => p.match_id);
+        const matchPicks = rows.map((r) =>
+            ({
+                match_id: r.id,
+                home_id: r.home_id,
+                away_id: r.away_id,
+                picks: grouped[r.id]
+            })
+        );
+
+        res.json(matchPicks);
+    } catch (err) {
+        console.error(err);
+    }
+}
+export { getGroups, getMatch, getStandings, getKnockoutMatches, getLastMatch, getPicks };
