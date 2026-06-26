@@ -1,5 +1,7 @@
 import sql from './db.js';
 
+const PICK_REFRESH_TIME = parseInt(process.env.PICK_REFRESH_TIME, 10);
+
 async function getGroups(req, res) {
     try {
         const data = await sql`SELECT id, position, flag_code, fifa_code, country, groupid, won, drawn, lost, goals_for, goals_against FROM teams ORDER BY position;`;
@@ -145,10 +147,9 @@ async function getPicks(req, res) {
     const date = req.query.date;
     const zone = req.query.zone;
     try {
-        const startUTC = Temporal.Now.plainDateISO('UTC')
-                        .toZonedDateTime({timeZone: 'UTC', plainTime: '08:00'}).toInstant().toString();
-        const endUTC = Temporal.Now.plainDateISO('UTC')
-                        .toZonedDateTime({timeZone: 'UTC', plainTime: '08:00'}).add({days: 1}).toInstant().toString();
+        const startDay = Temporal.Now.zonedDateTimeISO('UTC').subtract({hours: PICK_REFRESH_TIME}).toPlainDate();
+        const startUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).toInstant().toString();
+        const endUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).add({days: 1}).toInstant().toString();
 
         const rows = await sql`SELECT id, home_id, away_id FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endUTC} ORDER BY timestamp;`;
         const ids = rows.map((r) => r.id);
