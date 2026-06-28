@@ -295,11 +295,11 @@ async function calculatePointsForR32Picks() {
 // Update picks' match id to track a real match in the knockouts
 async function updatePickMatchId(id) {
     try {
-        await sql`UPDATE picks p
-        SET p.match_id = m.id
+        await sql`UPDATE picks
+        SET match_id = m.id
         FROM matches m
-        WHERE (p.winner_id = m.home_id OR p.winner_id = m.away_id)
-        AND p.round = m.round AND m.id = ${id};`;
+        WHERE (picks.winner_id = m.home_id OR picks.winner_id = m.away_id)
+        AND picks.round = m.round AND m.id = ${id};`;
         
         console.log(`Updated match id for picks (match: ${id}).`)
     } catch (err) {
