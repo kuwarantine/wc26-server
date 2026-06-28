@@ -292,6 +292,21 @@ async function calculatePointsForR32Picks() {
     return users;
 }
 
+// Update picks' match id to track a real match in the knockouts
+async function updatePickMatchId(id) {
+    try {
+        await sql`UPDATE picks p
+        SET p.match_id = m.id
+        FROM matches m
+        WHERE (p.winner_id = m.home_id OR p.winner_id = m.away_id)
+        AND p.round = m.round AND m.id = ${id};`;
+        
+        console.log(`Updated match id for picks (match: ${id}).`)
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 // Push updated match data to DB
 async function pushMatchData(matches) {
     const matchesArray = [];
@@ -417,6 +432,7 @@ export async function pullNewFixturesForRound(round) {
 
         for (const match of addedMatches) {
             await scheduleMatch(match.id, match.timestamp.toISOString());
+            await updatePickMatchId(match.id);
         }
     }
 }
@@ -435,6 +451,7 @@ export async function pullNewFixturesFromDate(date) {
 
         for (const match of addedMatches) {
             await scheduleMatch(match.id, match.timestamp.toISOString());
+            await updatePickMatchId(match.id);
         }
     }
 }
