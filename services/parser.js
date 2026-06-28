@@ -11,7 +11,7 @@ const R32_rows = [9, 10, 13, 14, 17, 18, 21, 22, 25, 26, 29, 30, 33, 34, 37, 38,
                     41, 42, 45, 46, 49, 50, 53, 54, 57, 58, 61, 62, 65, 66, 69, 70];
 const R16_cols = [70, 71, 72, 73];
 const R16_rows = [11, 12, 19, 20, 27, 28, 35, 36, 43, 44, 51, 52, 59, 60, 67, 68];
-const QF_cols = [77, 78, 89, 80];
+const QF_cols = [77, 78, 79, 80];
 const QF_rows = [15, 16, 31, 32, 47, 48, 63, 64];
 const SF_cols = [84, 85, 86, 87];
 const SF_rows= [22, 23, 54, 55];
@@ -263,4 +263,3 @@ export async function readAndPushPicks(num) {
     await insertData('picks', knockoutPicks.flat());
     await insertData('round_picks', r32Teams.flat());
 }
-

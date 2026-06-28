@@ -7,6 +7,7 @@ const MULTI_FIXTURE_ENDPOINT='fixtures?ids=';
 const ROUND_FIXTURE_ENDPOINT='fixtures?league=1&season=2026&round=';
 const DATE_FIXTURE_ENDPOINT='fixtures?league=1&season=2026&from=';
 const STANDINGS_ENDPOINT='standings?league=1&season=2026';
+const FINAL_DATE = '2026-07-19';
 
 const NUM_GROUPS = 12;
 const ROUNDS = 
@@ -101,7 +102,7 @@ async function fetchEventsForFixture(id) {
 
 async function fetchFixturesFromDate(date) {
     try {
-        const res = await fetch(process.env.API_URL+DATE_FIXTURE_ENDPOINT+date, {method: 'GET', headers: headers});
+        const res = await fetch(process.env.API_URL+DATE_FIXTURE_ENDPOINT+date+'&to='+FINAL_DATE, {method: 'GET', headers: headers});
         const json = await res.json();
         return json;
     } catch (err) {

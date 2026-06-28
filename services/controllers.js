@@ -24,6 +24,7 @@ async function getKnockoutMatches(req, res) {
 
             const match = {
                     date: row.timestamp.valueOf(),
+                    round: row.round,
                     homeTeam: home.country,
                     awayTeam: away.country,
                     homeScore: row.home_score,
