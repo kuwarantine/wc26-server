@@ -17,26 +17,17 @@ async function getKnockoutMatches(req, res) {
         const matches = {};
 
         for (const row of rows) {
-            const homeData = await sql`SELECT country, flag_code FROM teams WHERE id = ${row.home_id};`;
-            const home = homeData[0];
-            const awayData = await sql`SELECT country, flag_code FROM teams WHERE id = ${row.away_id};`;
-            const away = awayData[0];
-
             const match = {
                     date: row.timestamp.valueOf(),
                     round: row.round,
-                    homeTeam: home.country,
-                    awayTeam: away.country,
+                    homeID: row.home_id,
+                    awayID: row.away_id,
                     homeScore: row.home_score,
                     awayScore: row.away_score,
                     homeET: row.home_et,
                     awayET: row.away_et,
                     homePen: row.home_pen,
                     awayPen: row.away_pen,
-                    homeFlagCode: home.flag_code,
-                    awayFlagCode: away.flag_code,
-                    homeFifaCode: home.fifa_code,
-                    awayFifaCode: away.fifa_code,
                     matchNumber: row.number
             };
 
