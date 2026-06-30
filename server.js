@@ -3,8 +3,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 import cors from 'cors';
+const isProd = process.env.NODE_ENV === 'production';
 const corsOptions = {
-    origin: ['http://localhost:5173', process.env.FRONTEND_URL],
+    origin: isProd ? process.env.FRONTEND_URL : '*',
     credentials: true,
     optionsSuccessStatus: 200,
 };

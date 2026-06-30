@@ -28,6 +28,8 @@ async function getKnockoutMatches(req, res) {
                     awayET: row.away_et,
                     homePen: row.home_pen,
                     awayPen: row.away_pen,
+                    winnerID: row.winner_id,
+                    finishCode: row.finish_code,
                     matchNumber: row.number
             };
 
