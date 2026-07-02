@@ -307,6 +307,31 @@ async function updatePickMatchId(id) {
     }
 }
 
+// Update next match with winner in knockout rounds
+async function updateNextMatch(matches) {
+    const knockoutIds = matches.filter((m) => m.round > 1).map((m) => m.id);
+
+    if (knockoutIds.length > 0) {
+        try {
+            await sql`UPDATE matches next
+                        SET
+                            home_id = CASE 
+                                WHEN previous.next_is_home THEN previous.winner_id
+                                ELSE next.home_id
+                            END,
+                            away_id = CASE
+                                WHEN NOT previous.next_is_home THEN previous.winner_id
+                                ELSE next.away_id
+                            END
+                        FROM matches previous
+                        WHERE previous.next_number = next.number AND previous.id = ANY(${knockoutIds});
+                      `;
+        } catch (err) {
+            console.error(err);
+        }
+    }
+}
+
 // Push updated match data to DB
 async function pushMatchData(matches) {
     const matchesArray = [];
@@ -396,6 +421,7 @@ export async function updateForMatchesIfComplete(ids) {
     if (matches.length > 0) {
         await pushMatchData(matches);
         await insertData('events', events);
+        await updateNextMatch(matches);
         console.log(`Updated ${matches.length} matches and events: ${matches.map((m) => m.id)}.`);
     }
 
@@ -420,14 +446,17 @@ export async function updateStandings() {
 // Fetches, parses, and pushes new fixtures to DB by round
 export async function pullNewFixturesForRound(round) {
     const matches = await getUpcomingFixturesForRound(round);
+    const matchesArray = matches.map((m) => [m.id, m.timestamp, m.home_id, m.away_id, m.round]);
 
     if (matches.length > 0) {
-        const addedMatches = await sql`INSERT INTO matches ${sql(matches)}
-                  ON CONFLICT (id)
-                  DO UPDATE SET
-                    timestamp = EXCLUDED.timestamp
-                  WHERE matches.timestamp IS DISTINCT FROM EXCLUDED.timestamp
-                  RETURNING id, timestamp`;
+        const addedMatches = await sql`
+                UPDATE matches m
+                SET id = (nm.id)::int,
+                    timestamp = (nm.timestamp)::timestamptz
+                FROM (VALUES ${sql(matchesArray)}) AS nm (id, timestamp, home_id, away_id, round)
+                WHERE m.home_id = (nm.home_id)::int AND m.away_id = (nm.away_id)::int AND m.round = (nm.round)::int
+                    AND (m.id IS NULL OR m.timestamp IS DISTINCT FROM (nm.timestamp)::timestamptz)
+                RETURNING m.id, m.timestamp`;
         console.log(`Added ${addedMatches.length} new fixtures for round ${round}.`);
 
         for (const match of addedMatches) {
@@ -439,14 +468,17 @@ export async function pullNewFixturesForRound(round) {
 
 export async function pullNewFixturesFromDate(date) {
     const matches = await getUpcomingFixturesFromDate(date);
+    const matchesArray = matches.map((m) => [m.id, m.timestamp, m.home_id, m.away_id, m.round]);
 
     if (matches.length > 0) {
-        const addedMatches = await sql`INSERT INTO matches ${sql(matches)}
-                  ON CONFLICT (id)
-                  DO UPDATE SET
-                    timestamp = EXCLUDED.timestamp
-                  WHERE matches.timestamp IS DISTINCT FROM EXCLUDED.timestamp
-                  RETURNING id, timestamp`;
+        const addedMatches = await sql`
+                UPDATE matches m
+                SET id = (nm.id)::int,
+                    timestamp = (nm.timestamp)::timestamptz
+                FROM (VALUES ${sql(matchesArray)}) AS nm (id, timestamp, home_id, away_id, round)
+                WHERE m.home_id = (nm.home_id)::int AND m.away_id = (nm.away_id)::int AND m.round = (nm.round)::int
+                    AND (m.id IS NULL OR m.timestamp IS DISTINCT FROM (nm.timestamp)::timestamptz)
+                RETURNING m.id, m.timestamp`;
         console.log(`Added ${addedMatches.length} new fixtures from ${date} and later.`);
 
         for (const match of addedMatches) {
