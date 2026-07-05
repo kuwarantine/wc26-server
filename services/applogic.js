@@ -31,18 +31,18 @@ function matchResult(home_score, away_score) {
 
 // Helper function for knockout exact score points
 function pointsForExactScore(match, pick, round) {
-    if (match.finish_code === pick.finish_code) {
+    if (match.status === pick.status) {
         if (match.home_score === pick.home_score && match.away_score === pick.away_score) {
-            if (match.finish_code === 'FT') { return EXACT_SCORE_PONTS[round]; }
+            if (match.status === 'FT') { return EXACT_SCORE_PONTS[round]; }
             if (match.home_et === pick.home_et && match.away_et === pick.away_et) {
-                if (match.finish_code === 'AET') { return EXACT_SCORE_PONTS[round]; }
+                if (match.status === 'AET') { return EXACT_SCORE_PONTS[round]; }
                 if (match.home_pen === pick.home_pen && match.away_pen === pick.away_pen) { return EXACT_SCORE_PONTS[round]; }
             }
         }
         else if (match.home_score === pick.away_score && match.away_score === pick.home_score) {
-            if (match.finish_code === 'FT') { return EXACT_SCORE_PONTS[round]; }
+            if (match.status === 'FT') { return EXACT_SCORE_PONTS[round]; }
             if (match.home_et === pick.away_et && match.away_et === pick.home_et) {
-                if (match.finish_code === 'AET') { return EXACT_SCORE_PONTS[round]; }
+                if (match.status === 'AET') { return EXACT_SCORE_PONTS[round]; }
                 if (match.home_pen === pick.away_pen && match.away_pen === pick.home_pen) { return EXACT_SCORE_PONTS[round]; }
             }
         }
@@ -80,7 +80,7 @@ async function calculatePointsForKnockoutMatch(match) {
         const winner_id = match.winner_id;
         const round = match.round;
         
-        const picks = await sql`SELECT user_id, home_score, away_score, home_et, away_et, home_pen, away_pen, finish_code FROM picks WHERE winner_id=${winner_id} AND round=${round};`;
+        const picks = await sql`SELECT user_id, home_score, away_score, home_et, away_et, home_pen, away_pen, status FROM picks WHERE winner_id=${winner_id} AND round=${round};`;
 
         const users = {};
         for (const pick of picks) {
@@ -97,7 +97,7 @@ async function calculatePointsForKnockoutMatch(match) {
 
 // Combines group + knockout match points checking
 async function calculatePointsForMatch(match_id) {
-    const matches = await sql`SELECT id, winner_id, home_score, away_score, home_et, away_et, home_pen, away_pen, round, finish_code FROM matches WHERE id=${match_id};`;
+    const matches = await sql`SELECT id, winner_id, home_score, away_score, home_et, away_et, home_pen, away_pen, round, status FROM matches WHERE id=${match_id};`;
     const match = matches[0];
     const users = (match.round > 1) ? await calculatePointsForKnockoutMatch(match) : await calculatePointsForGroupMatch(match);
     return users;
@@ -165,18 +165,18 @@ async function calculatePointsForKnockoutMatch2(match_ids) {
                     SET 
                         winner_points = r.winner_points,
                         score_points = CASE
-                            WHEN p.finish_code != m.finish_code THEN 0
+                            WHEN p.status != m.status THEN 0
 
                             WHEN p.home_score = m.home_score AND p.away_score = m.away_score AND (
-                                (p.finish_code = 'FT') OR
-                                (p.finish_code = 'AET' AND p.home_et = m.home_et AND p.away_et = m.away_et) OR
-                                (p.finish_code = 'PEN' AND p.home_et = m.home_et AND p.away_et = m.away_et AND p.home_pen = m.home_pen AND p.away_pen = m.away_pen)
+                                (p.status = 'FT') OR
+                                (p.status = 'AET' AND p.home_et = m.home_et AND p.away_et = m.away_et) OR
+                                (p.status = 'PEN' AND p.home_et = m.home_et AND p.away_et = m.away_et AND p.home_pen = m.home_pen AND p.away_pen = m.away_pen)
                             ) THEN r.score_points
                             
                             WHEN p.home_score = m.away_score AND p.away_score = m.home_score AND (
-                                (p.finish_code = 'FT') OR
-                                (p.finish_code = 'AET' AND p.home_et = m.away_et AND p.away_et = m.home_et) OR
-                                (p.finish_code = 'PEN' AND p.home_et = m.away_et AND p.away_et = m.home_et AND p.home_pen = m.away_pen AND p.away_pen = m.home_pen)
+                                (p.status = 'FT') OR
+                                (p.status = 'AET' AND p.home_et = m.away_et AND p.away_et = m.home_et) OR
+                                (p.status = 'PEN' AND p.home_et = m.away_et AND p.away_et = m.home_et AND p.home_pen = m.away_pen AND p.away_pen = m.home_pen)
                             ) THEN r.score_points
 
                             ELSE 0
@@ -337,14 +337,14 @@ async function pushMatchData(matches) {
     const matchesArray = [];
     for (const match of matches) {
         const matchArray = [match.id, match.complete, match.home_score, match.away_score, match.home_et, match.away_et,
-                            match.home_pen, match.away_pen, match.finish_code, match.winner_id];
+                            match.home_pen, match.away_pen, match.status, match.winner_id];
         matchesArray.push(matchArray);
     }
 
     try {
         await sql`UPDATE matches SET complete = (nm.complete)::boolean, home_score = (nm.home_score)::int, away_score = (nm.away_score)::int, home_et = (nm.home_et)::int, 
-                  away_et = (nm.away_et)::int, home_pen = (nm.home_pen)::int, away_pen = (nm.away_pen)::int, finish_code = nm.finish_code, winner_id = (nm.winner_id)::int 
-                  FROM (VALUES ${sql(matchesArray)}) AS nm (id, complete, home_score, away_score, home_et, away_et, home_pen, away_pen, finish_code, winner_id) 
+                  away_et = (nm.away_et)::int, home_pen = (nm.home_pen)::int, away_pen = (nm.away_pen)::int, status = nm.status, winner_id = (nm.winner_id)::int 
+                  FROM (VALUES ${sql(matchesArray)}) AS nm (id, complete, home_score, away_score, home_et, away_et, home_pen, away_pen, status, winner_id) 
                   WHERE matches.id = (nm.id)::int`;
     } catch (err) {
         console.error('Failed to push match data:', err.message);

@@ -150,29 +150,26 @@ function parseFixture(match) {
     const away_id = match.teams.away.id;
     const round = roundIDFromString(match.league.round);
     const complete = match.fixture.status.long === 'Match Finished';
-    const in_ft = match.fixture.status.short === 'FT'
+    const status = match.fixture.status.short;
+    const after_ft = match.fixture.status.elapsed > 90;
 
-    if (complete) {
-        const home_score = match.score.fulltime.home;
-        const away_score = match.score.fulltime.away;
-        const home_et = in_ft ? null : (home_score + (match.score.extratime.home ?? 0));
-        const away_et = in_ft ? null : (away_score + (match.score.extratime.away ?? 0));
-        const home_pen = match.score.penalty.home;
-        const away_pen = match.score.penalty.away;
-        const finish_code = match.fixture.status.short;
-        const winner_id = winnerIDFromFixture(home_id, match.teams.home.winner, away_id, match.teams.away.winner);
-        const fixture = {id: match_id, timestamp: timestamp, home_id: home_id, away_id: away_id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen, complete: complete, finish_code: finish_code, round: round, winner_id: winner_id};
-        return fixture;
-    }
+    const home_score = match.score.fulltime.home;
+    const away_score = match.score.fulltime.away;
+    const home_et = after_ft ? (home_score + (match.score.extratime.home ?? 0)) : null;
+    const away_et = after_ft ? (away_score + (match.score.extratime.away ?? 0)) : null;
+    const home_pen = match.score.penalty.home;
+    const away_pen = match.score.penalty.away;
 
-    const fixture = {id: match_id, timestamp: timestamp, home_id: home_id, away_id: away_id, round: round};
+    const winner_id = complete ? winnerIDFromFixture(home_id, match.teams.home.winner, away_id, match.teams.away.winner) : null;
+
+    const fixture = {id: match_id, timestamp: timestamp, home_id: home_id, away_id: away_id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen, complete: complete, status: status, round: round, winner_id: winner_id};
     return fixture;
 }
 
 // Parses a fixture events JSON  and returns an events array to be pushed into DB
 function parseEvents(id, event_json) {
     const events = [];
-    for (let event of event_json) {
+    for (const event of event_json) {
         const team_id = event.team.id;
         const time = event.time.elapsed;
         const extra_time = event.time.extra;
@@ -180,6 +177,7 @@ function parseEvents(id, event_json) {
         const assist = event.assist.name;
         const type = event.type;
         const detail = event.detail;
+        const comments = event.comments;
 
         const e = {
             match_id: id,
@@ -189,7 +187,8 @@ function parseEvents(id, event_json) {
             player: player,
             assist: assist,
             type: type,
-            detail: detail
+            detail: detail,
+            comments: comments
         };
 
         events.push(e);

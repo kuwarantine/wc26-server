@@ -29,7 +29,7 @@ async function getKnockoutMatches(req, res) {
                     homePen: row.home_pen,
                     awayPen: row.away_pen,
                     winnerID: row.winner_id,
-                    finishCode: row.finish_code,
+                    status: row.status,
                     matchNumber: row.number
             };
 
@@ -63,7 +63,7 @@ async function getMatch(req, res) {
 
             const match = {
                 date: row.timestamp.valueOf(),
-                finishCode: row.finish_code,
+                status: row.status,
                 homeTeam: home.country,
                 awayTeam: away.country,
                 homeScore: row.home_score,
@@ -113,7 +113,7 @@ async function getLastMatch(req, res) {
 
         const match = {
                 date: last.timestamp.valueOf(),
-                finishCode: last.finish_code,
+                status: last.status,
                 winner: winner,
                 homeTeam: home.country,
                 awayTeam: away.country,
