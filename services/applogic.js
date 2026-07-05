@@ -22,119 +22,9 @@ const EXACT_SCORE_PONTS =
     6: 4
 }
 
-// Helper function to determine match result, 1 is home win, 0 is draw, -1 is away win
-function matchResult(home_score, away_score) {
-    if (home_score > away_score) { return 1; }
-    else if (away_score > home_score) { return -1; }
-    else { return 0; }
-}
+/* ========== POINTS ========== */
 
-// Helper function for knockout exact score points
-function pointsForExactScore(match, pick, round) {
-    if (match.status === pick.status) {
-        if (match.home_score === pick.home_score && match.away_score === pick.away_score) {
-            if (match.status === 'FT') { return EXACT_SCORE_PONTS[round]; }
-            if (match.home_et === pick.home_et && match.away_et === pick.away_et) {
-                if (match.status === 'AET') { return EXACT_SCORE_PONTS[round]; }
-                if (match.home_pen === pick.home_pen && match.away_pen === pick.away_pen) { return EXACT_SCORE_PONTS[round]; }
-            }
-        }
-        else if (match.home_score === pick.away_score && match.away_score === pick.home_score) {
-            if (match.status === 'FT') { return EXACT_SCORE_PONTS[round]; }
-            if (match.home_et === pick.away_et && match.away_et === pick.home_et) {
-                if (match.status === 'AET') { return EXACT_SCORE_PONTS[round]; }
-                if (match.home_pen === pick.away_pen && match.away_pen === pick.home_pen) { return EXACT_SCORE_PONTS[round]; }
-            }
-        }
-    }
-    return 0;
-}
-
-/* ========== OLD ========== */
-
-// Checks the points each user got from the match and returns a map of user id to points
-async function calculatePointsForGroupMatchOld(match) {
-    try {
-        const match_result = matchResult(match.home_score, match.away_score);
-
-        const picks = await sql`SELECT user_id, home_score, away_score FROM picks WHERE match_id=${match.id};`;
-
-        const users = {};
-        for (const pick of picks) {
-            let points = 0;
-            const pick_result = matchResult(pick.home_score, pick.away_score);
-            if (pick_result === match_result) { points += 1 }
-            if (pick.home_score === match.home_score && pick.away_score === match.away_score) { points += 1 }
-            users[pick.user_id] = points;
-        }
-
-        return users;
-    } catch(err) {
-        console.error(err);
-    }
-}
-
-// Checks the points each user got after a knockout match finishes, correct winner is given if they have the team getting out of the round, score given if they win with the exact score
-async function calculatePointsForKnockoutMatchOld(match) {
-    try {
-        const winner_id = match.winner_id;
-        const round = match.round;
-        
-        const picks = await sql`SELECT user_id, home_score, away_score, home_et, away_et, home_pen, away_pen, status FROM picks WHERE winner_id=${winner_id} AND round=${round};`;
-
-        const users = {};
-        for (const pick of picks) {
-            let points = ROUND_WIN_POINTS[round];
-            points += pointsForExactScore(match, pick, round);
-            users[pick.user_id] = points;
-        }
-
-        return users;
-    } catch(err) {
-        console.error(err);
-    }
-}
-
-// Combines group + knockout match points checking
-async function calculatePointsForMatchOld(match_id) {
-    const matches = await sql`SELECT id, winner_id, home_score, away_score, home_et, away_et, home_pen, away_pen, round, status FROM matches WHERE id=${match_id};`;
-    const match = matches[0];
-    const users = (match.round > 1) ? await calculatePointsForKnockoutMatchOld(match) : await calculatePointsForGroupMatchOld(match);
-    return users;
-}
-
-// Same as above but multiple matches
-async function calculatePointsForMatchesOld(match_ids) {
-    const users = {};
-    for (const match_id of match_ids) {
-        let match_points = await calculatePointsForMatchOld(match_id);
-        for (const user_id in match_points) {
-            users[user_id] = (users[user_id] || 0) + match_points[user_id];
-        }
-    }
-    return users;
-}
-
-// Check any fixtures that we haven't pulled and push to DB if complete, also update standings, defaults to knockout
-export async function updateFixturesOld() {
-    const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
-    const ids = matches.map((m) => m.id);
-    const completedMatches = await updateForMatchesIfComplete(ids);
-    if (completedMatches.length > 0) {
-        const completedMatchIds = completedMatches.map((m) => m.id);
-        const new_points = await calculatePointsForMatchesOld(completedMatchIds);
-        await pushPointsForUsers(new_points, completedMatchIds);
-        console.log(`Updated for ${completedMatchIds.length} matches: ${completedMatchIds.toString()}.`);
-        await updateStandings();
-    } else {
-        console.log(`No matches ready for update.`);
-    }
-    
-}
-
-/* ========== NEW ========== */
-
-async function calculatePointsForGroupMatch2(match_ids) {
+async function calculatePointsForGroupMatch(match_ids) {
     if (match_ids.length === 0) { return; }
     try {
         await sql`UPDATE picks p 
@@ -158,7 +48,7 @@ async function calculatePointsForGroupMatch2(match_ids) {
     }
 }
 
-async function calculatePointsForKnockoutMatch2(match_ids) {
+async function calculatePointsForKnockoutMatch(match_ids) {
     if (match_ids.length === 0) { return; }
     try {
         await sql`UPDATE picks p 
@@ -189,27 +79,17 @@ async function calculatePointsForKnockoutMatch2(match_ids) {
     }
 }
 
-async function calculatePointsForMatch2(matches) {
+async function calculatePointsForMatch(matches) {
     const groupIds = matches.filter((m) => m.round === 1).map((m) => m.id);
     const knockoutIds = matches.filter((m) => m.round > 1).map((m) => m.id);
 
-    await calculatePointsForGroupMatch2(groupIds);
-    await calculatePointsForKnockoutMatch2(knockoutIds);
+    await calculatePointsForGroupMatch(groupIds);
+    await calculatePointsForKnockoutMatch(knockoutIds);
 }
 
-export async function recalculatePointsForComplete2() {
+export async function recalculatePointsForComplete() {
     const matches = await sql`SELECT id, round FROM matches WHERE complete = TRUE;`;
-    await calculatePointsForMatch2(matches);
-}
-
-async function updateFixtures2() {
-    const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
-    const ids = matches.map((m) => m.id);
-    const completedMatches = await updateForMatchesIfComplete(ids);
-    if (completedMatches.length > 0) {
-        await calculatePointsForMatch2(completedMatches);
-        console.log(`Updated for ${completedMatches.length} matches: ${completedMatches.map((m) => m.id)}.`)
-    }
+    await calculatePointsForMatch(matches);
 }
 
 /* ========== SCHEDULERS ========== */
@@ -266,7 +146,7 @@ export async function scheduleIncompleteMatches() {
     console.log(`Scheduled ${successful} matches.`);
 }
 
-/* ========== BOTH ========== */
+/* ========== MISC ========== */
 
 // Caclulate points for teams that reach round of 32
 async function calculatePointsForR32Picks() {
@@ -367,46 +247,12 @@ async function pushStandings(teams) {
     }
 }
 
-export async function recalculatePointsForComplete() {
-    try {
-        const matches = await sql`SELECT id FROM matches WHERE complete=TRUE AND parsed=false;`;
-        const ids = matches.map((m) => m.id);
-        const users = await calculatePointsForMatchesOld(ids);
-
-        return {new_points: users, match_ids: ids};
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-// Add points to users in DB
-export async function pushPointsForUsers(new_points, match_ids) {
-    try {
-        const users = await sql`SELECT id, points FROM users;`;
-        const usersArray = []
-        for (const user of users) {
-            user.points += new_points[user.id] ?? 0;
-            usersArray.push([user.id, user.points]);
-        }
-
-        
-        await sql`UPDATE users SET points = (np.points)::int FROM (VALUES ${sql(usersArray)}) as np (id, points) WHERE users.id = (np.id)::int`;
-        if (match_ids.length > 0) { await sql`UPDATE matches SET parsed = TRUE WHERE id = ANY(${match_ids});`; }
-    } catch(err) {
-        console.error(err);
-    }
-}
-
 export async function updateFixtures() {
     const matches = await sql`SELECT id FROM matches WHERE complete = FALSE AND timestamp < now();`;
     const ids = matches.map((m) => m.id);
     const completedMatches = await updateForMatchesIfComplete(ids);
     if (completedMatches.length > 0) {
-        const completedMatchIds = completedMatches.map((m) => m.id);
-        const new_points = await calculatePointsForMatchesOld(completedMatchIds);
-        await pushPointsForUsers(new_points, completedMatchIds);
-
-        await calculatePointsForMatch2(completedMatches);
+        await calculatePointsForMatch(completedMatches);
         console.log(`Updated for ${completedMatches.length} matches: ${completedMatches.map((m) => m.id)}.`);
         await updateStandings();
     } else {
@@ -429,10 +275,7 @@ export async function updateForMatchesIfComplete(ids) {
 }
 
 export async function updatePoints(id, round) {
-    const new_points = await calculatePointsForMatchesOld([id]);
-    await pushPointsForUsers(new_points, [id]);
-
-    await calculatePointsForMatch2([{id: id, round: round}]);
+    await calculatePointsForMatch([{id: id, round: round}]);
     console.log(`Updated points for match ${id}.`);
 }
 
