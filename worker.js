@@ -1,5 +1,5 @@
 import boss from './services/queue.js';
-import { pullNewFixturesFromToday, updateForMatchesIfComplete, updatePoints, updateStandings } from './services/applogic.js';
+import { pullNewFixturesFromToday, updateMatch, updatePoints, updateStandings } from './services/applogic.js';
 
 async function worker() {
     boss.on('error', console.error);
@@ -25,18 +25,49 @@ async function worker() {
     await boss.work('check-standings', updateStandings);
 }
 
+// ========== HELPERS ==========
+
+function retryTimeForStatus(status, afterBreak) {
+    switch (status) {
+        case '1H':
+        case '2H':
+        case 'ET':
+        case 'P':
+        case 'BT':
+        case 'LIVE':
+            return 60;
+        case 'NS':
+            return 30;
+        case 'HT':
+            return afterBreak ? 30 : 14*60; // Buffer minute
+        case 'SUSP':
+        case 'INT':
+            return 120;
+        default:
+            return null;
+    }
+}
+
+// ========== JOBS ==========
+
 async function trackMatch([job]) {
     const id = job.data.id;
+    const afterBreak = job.data.afterBreak ?? false;
     try {
-        const matches = await updateForMatchesIfComplete([id]);
-        if (matches.length === 0) {
-            const retryTime = Temporal.Now.instant().add({minutes: 1}).toString();
-            await boss.send('track-match', { id }, { startAfter: retryTime, singletonKey: `match-${id}` });
-            return;
-        }
+        const match = await updateMatch(id);
 
-        const match = matches[0];
-        await boss.send('calculate-points', { id: id, round: match.round });
+        if (!match.complete) {
+            const retryTime = retryTimeForStatus(match.status, afterBreak);
+            if (retryTime !== null) {
+                const data = { id: id };
+                if (match.status === 'HT') { data.afterBreak = true; }
+
+                const timeString = Temporal.Now.instant().add({seconds: retryTime}).toString();
+                await boss.send('track-match', data, { startAfter: timeString, singletonKey: `match-${id}` });
+            }
+        } else {
+            await boss.send('calculate-points', { id: id, round: match.round });
+        }
     } catch (err) {
         console.error(err);
     }

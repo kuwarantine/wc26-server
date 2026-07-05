@@ -1,5 +1,5 @@
 import sql, { insertData } from './db.js';
-import { getCompleteMatchesAndEvents, getStandings, getUpcomingFixturesForRound, getUpcomingFixturesFromDate } from './footballApi.js';
+import { getCompleteMatchesAndEvents, getMatchAndEvents, getStandings, getUpcomingFixturesForRound, getUpcomingFixturesFromDate } from './footballApi.js';
 import boss from './queue.js';
 
 const ROUND_WIN_POINTS = 
@@ -55,18 +55,18 @@ async function calculatePointsForKnockoutMatch(match_ids) {
                     SET 
                         winner_points = r.winner_points,
                         score_points = CASE
-                            WHEN p.status != m.status THEN 0
+                            WHEN p.finish_code != m.status THEN 0
 
                             WHEN p.home_score = m.home_score AND p.away_score = m.away_score AND (
-                                (p.status = 'FT') OR
-                                (p.status = 'AET' AND p.home_et = m.home_et AND p.away_et = m.away_et) OR
-                                (p.status = 'PEN' AND p.home_et = m.home_et AND p.away_et = m.away_et AND p.home_pen = m.home_pen AND p.away_pen = m.away_pen)
+                                (p.finish_code = 'FT') OR
+                                (p.finish_code = 'AET' AND p.home_et = m.home_et AND p.away_et = m.away_et) OR
+                                (p.finish_code = 'PEN' AND p.home_et = m.home_et AND p.away_et = m.away_et AND p.home_pen = m.home_pen AND p.away_pen = m.away_pen)
                             ) THEN r.score_points
                             
                             WHEN p.home_score = m.away_score AND p.away_score = m.home_score AND (
-                                (p.status = 'FT') OR
-                                (p.status = 'AET' AND p.home_et = m.away_et AND p.away_et = m.home_et) OR
-                                (p.status = 'PEN' AND p.home_et = m.away_et AND p.away_et = m.home_et AND p.home_pen = m.away_pen AND p.away_pen = m.home_pen)
+                                (p.finish_code = 'FT') OR
+                                (p.finish_code = 'AET' AND p.home_et = m.away_et AND p.away_et = m.home_et) OR
+                                (p.finish_code = 'PEN' AND p.home_et = m.away_et AND p.away_et = m.home_et AND p.home_pen = m.away_pen AND p.away_pen = m.home_pen)
                             ) THEN r.score_points
 
                             ELSE 0
@@ -115,7 +115,7 @@ async function scheduleMatch(id, timestamp) {
         await boss.cancel('track-match', jobs.map((j) => j.id));
         jobId = await boss.send(
             'track-match',
-            { id },
+            { id: id },
             {
                 startAfter: timestamp,
                 singletonKey: `match-${id}`
@@ -217,17 +217,40 @@ async function pushMatchData(matches) {
     const matchesArray = [];
     for (const match of matches) {
         const matchArray = [match.id, match.complete, match.home_score, match.away_score, match.home_et, match.away_et,
-                            match.home_pen, match.away_pen, match.status, match.winner_id];
+                            match.home_pen, match.away_pen, match.status, match.winner_id, match.elapsed_time, match.extra_elapsed_time];
         matchesArray.push(matchArray);
     }
 
     try {
-        await sql`UPDATE matches SET complete = (nm.complete)::boolean, home_score = (nm.home_score)::int, away_score = (nm.away_score)::int, home_et = (nm.home_et)::int, 
-                  away_et = (nm.away_et)::int, home_pen = (nm.home_pen)::int, away_pen = (nm.away_pen)::int, status = nm.status, winner_id = (nm.winner_id)::int 
-                  FROM (VALUES ${sql(matchesArray)}) AS nm (id, complete, home_score, away_score, home_et, away_et, home_pen, away_pen, status, winner_id) 
+        await sql`UPDATE matches 
+                    SET complete = (nm.complete)::boolean, home_score = (nm.home_score)::int, away_score = (nm.away_score)::int, home_et = (nm.home_et)::int, 
+                        away_et = (nm.away_et)::int, home_pen = (nm.home_pen)::int, away_pen = (nm.away_pen)::int, status = nm.status, winner_id = (nm.winner_id)::int,
+                        elapsed_time = (nm.elapsed_time)::int, extra_elapsed_time = (nm.extra_elapsed_time)::int
+                  FROM (VALUES ${sql(matchesArray)})
+                  AS nm (id, complete, home_score, away_score, home_et, away_et, home_pen, away_pen, status, winner_id, elapsed_time, extra_elapsed_time) 
                   WHERE matches.id = (nm.id)::int`;
     } catch (err) {
         console.error('Failed to push match data:', err.message);
+    }
+}
+
+// Push updated events to DB
+async function pushEvents(events) {
+    try {
+        await sql`INSERT INTO events ${sql(events)}
+                    ON CONFLICT (match_id, event_index)
+                    DO UPDATE SET
+                        (team_id, time, extra_time, player, assist, type, detail, comments) =
+                        (EXCLUDED.team_id, EXCLUDED.time, EXCLUDED.extra_time, EXCLUDED.player, 
+                        EXCLUDED.assist, EXCLUDED.type, EXCLUDED.detail, EXCLUDED.comments)
+                        
+                    WHERE (events.team_id, events.time, events.extra_time, events.player, 
+                        events.assist, events.type, events.detail, events.comments)
+                        IS DISTINCT FROM
+                        (EXCLUDED.team_id, EXCLUDED.time, EXCLUDED.extra_time, EXCLUDED.player, 
+                        EXCLUDED.assist, EXCLUDED.type, EXCLUDED.detail, EXCLUDED.comments)`;
+    } catch (err) {
+        console.error('Failed to push events:', err.message);
     }
 }
 
@@ -258,6 +281,15 @@ export async function updateFixtures() {
     } else {
         console.log(`No matches ready for update.`);
     }
+}
+
+export async function updateMatch(id) {
+    const [match, events] = await getMatchAndEvents(id);
+
+    await pushMatchData([match]);
+    await pushEvents(events);
+
+    return match;
 }
 
 // Fetches matches, checks if they are complete, and if so pushes matches/events for complete, and return completed matches

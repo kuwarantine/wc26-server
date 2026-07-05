@@ -151,7 +151,10 @@ function parseFixture(match) {
     const round = roundIDFromString(match.league.round);
     const complete = match.fixture.status.long === 'Match Finished';
     const status = match.fixture.status.short;
-    const after_ft = match.fixture.status.elapsed > 90;
+    const elapsed_time = match.fixture.status.elapsed;
+    const extra_elapsed_time = match.fixture.status.extra;
+    const after_ft = elapsed_time > 90;
+    
 
     const home_score = match.score.fulltime.home;
     const away_score = match.score.fulltime.away;
@@ -162,14 +165,17 @@ function parseFixture(match) {
 
     const winner_id = complete ? winnerIDFromFixture(home_id, match.teams.home.winner, away_id, match.teams.away.winner) : null;
 
-    const fixture = {id: match_id, timestamp: timestamp, home_id: home_id, away_id: away_id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen, complete: complete, status: status, round: round, winner_id: winner_id};
+    const fixture = {id: match_id, timestamp: timestamp, home_id: home_id, away_id: away_id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen,
+                    complete: complete, status: status, round: round, winner_id: winner_id, elapsed_time: elapsed_time, extra_elapsed_time: extra_elapsed_time};
     return fixture;
 }
 
 // Parses a fixture events JSON  and returns an events array to be pushed into DB
 function parseEvents(id, event_json) {
     const events = [];
-    for (const event of event_json) {
+
+    event_json.forEach((event, i) => 
+    {
         const team_id = event.team.id;
         const time = event.time.elapsed;
         const extra_time = event.time.extra;
@@ -188,11 +194,12 @@ function parseEvents(id, event_json) {
             assist: assist,
             type: type,
             detail: detail,
-            comments: comments
+            comments: comments,
+            event_index: i
         };
 
         events.push(e);
-    }
+    });
 
     return events;
 }
@@ -210,6 +217,16 @@ export async function getUpcomingFixturesForRound(round) {
     const fixturesJSON = await fetchFixturesForRound(round);
     const fixtures = fixturesJSON.response.filter((m) => m.fixture.status.short === 'NS').map((m) => parseFixture(m));
     return fixtures;
+}
+
+export async function getMatchAndEvents(id) {
+    const fixturesJSON = await fetchFixture(id);
+    const match = fixturesJSON.response[0];
+
+    const m = parseFixture(match);
+    const e = parseEvents(m.id, match.events);
+
+    return [m, e];
 }
 
 export async function getCompleteMatchesAndEvents(ids) {

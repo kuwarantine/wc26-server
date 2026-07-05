@@ -149,8 +149,8 @@ function readKnockoutPicks(csv, id) {
 
             const match_res = knockoutMatchWinner(home, away);
             const winner_id = match_res.winner_id;
-            const status = match_res.status;
-            const pick = { user_id: id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen, winner_id: winner_id, round: r+2, status: status };
+            const finish_code = match_res.finish_code;
+            const pick = { user_id: id, home_score: home_score, away_score: away_score, home_et: home_et, away_et: away_et, home_pen: home_pen, away_pen: away_pen, winner_id: winner_id, round: r+2, finish_code: finish_code };
             picks.push(pick);
         }
         
@@ -213,21 +213,21 @@ function knockoutMatchWinner(home, away) {
     if (home.score === away.score) {
         if (home.et === away.et) {
             if (home.pen > away.pen) {
-                return {winner_id: teams[home.name], status: 'PEN'};
+                return {winner_id: teams[home.name], finish_code: 'PEN'};
             } else {
-                return {winner_id: teams[away.name], status: 'PEN'};
+                return {winner_id: teams[away.name], finish_code: 'PEN'};
             }
         }
         if (home.et > away.et) {
-            return {winner_id: teams[home.name], status: 'AET'};
+            return {winner_id: teams[home.name], finish_code: 'AET'};
         } else {
-            return {winner_id: teams[away.name], status: 'AET'};
+            return {winner_id: teams[away.name], finish_code: 'AET'};
         }
     }
     if (home.score > away.score) {
-        return {winner_id: teams[home.name], status: 'FT'};
+        return {winner_id: teams[home.name], finish_code: 'FT'};
     } else {
-        return {winner_id: teams[away.name], status: 'FT'};
+        return {winner_id: teams[away.name], finish_code: 'FT'};
     }
 }
 
