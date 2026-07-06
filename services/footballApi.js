@@ -156,10 +156,10 @@ function parseFixture(match) {
     const after_ft = elapsed_time > 90;
     
 
-    const home_score = match.score.fulltime.home;
-    const away_score = match.score.fulltime.away;
-    const home_et = after_ft ? (home_score + (match.score.extratime.home ?? 0)) : null;
-    const away_et = after_ft ? (away_score + (match.score.extratime.away ?? 0)) : null;
+    const home_score = after_ft ? match.score.fulltime.home : match.goals.home;
+    const away_score = after_ft ? match.score.fulltime.away : match.goals.away;
+    const home_et = after_ft ? match.goals.home : null;
+    const away_et = after_ft ? match.goals.away : null;
     const home_pen = match.score.penalty.home;
     const away_pen = match.score.penalty.away;
 
