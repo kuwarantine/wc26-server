@@ -82,7 +82,7 @@ async function getMatch(req, res) {
 
 async function getStandings(req, res) {
     try {
-        const rows = await sql`SELECT name, points, last_match_points FROM leaderboard ORDER BY points DESC, name;`;
+        const rows = await sql`SELECT name, points, new_points, current_rank, previous_rank FROM leaderboard`;
         res.json(rows);
     } catch (err) {
         console.error(err);
@@ -99,7 +99,7 @@ async function getLatestMatch(req, res) {
         });
         res.write('retry: 5000\n\n');
 
-        const [matchCache, timeToNext] = getLiveState();
+        const [matchCache, standingsCache, timeToNext] = getLiveState();
 
         if (!matchCache) {
             res.write('event: not-live\n');
@@ -108,14 +108,15 @@ async function getLatestMatch(req, res) {
             return;
         }
 
-        const initialMatch = packageMatch(matchCache.match, matchCache.home, matchCache.away);
+        const initialMatch = packageMatch(matchCache.match, matchCache.home, matchCache.away); 
         res.write('event: match-update\n');
-        res.write(`data: ${JSON.stringify({matchData: initialMatch})}\n\n`);
+        res.write(`data: ${JSON.stringify({matchData: initialMatch, standings: standingsCache})}\n\n`);
 
         const onMatchUpdate = (data) => {
-            const match = packageMatch(data.match, data.home, data.away);
+            const matchData = data.match;
+            const match = packageMatch(matchData.match, matchData.home, matchData.away);
             res.write('event: match-update\n');
-            res.write(`data: ${JSON.stringify({matchData: match})}\n\n`);
+            res.write(`data: ${JSON.stringify({matchData: match, standings: data.standings})}\n\n`);
         }
 
         const onMatchEnd = (data) => {
@@ -144,7 +145,7 @@ async function getLatestMatch(req, res) {
 
 async function getLastMatch(req, res) {
     try {
-        const [last] = await sql`SELECT * FROM matches WHERE complete = TRUE ORDER BY timestamp DESC LIMIT 1;`;
+        const [last] = await sql`SELECT * FROM matches WHERE complete = TRUE ORDER BY timestamp DESC LIMIT 1`;
         const match = packageMatch(last);
 
         res.json(match);
