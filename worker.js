@@ -1,4 +1,5 @@
 import boss from './services/queue.js';
+import sql from './services/db.js';
 import { pullNewFixturesFromToday, updateMatch, updatePoints, updateStandings } from './services/applogic.js';
 
 async function worker() {
@@ -43,6 +44,8 @@ function retryTimeForStatus(status, afterBreak) {
         case 'SUSP':
         case 'INT':
             return 120;
+        case 'PST':
+            return 30*60;
         default:
             return null;
     }
@@ -55,6 +58,7 @@ async function trackMatch([job]) {
     const afterBreak = job.data.afterBreak ?? false;
     try {
         const match = await updateMatch(id);
+        await sql.notify('live', `${id}`);
 
         if (!match.complete) {
             const retryTime = retryTimeForStatus(match.status, afterBreak);
@@ -66,6 +70,7 @@ async function trackMatch([job]) {
                 await boss.send('track-match', data, { startAfter: timeString, singletonKey: `match-${id}` });
             }
         } else {
+            await sql.notify('live', '0');
             await boss.send('calculate-points', { id: id, round: match.round });
         }
     } catch (err) {

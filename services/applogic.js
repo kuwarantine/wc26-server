@@ -236,6 +236,7 @@ async function pushMatchData(matches) {
 
 // Push updated events to DB
 async function pushEvents(events) {
+    if (events.length === 0) { return; }
     try {
         await sql`INSERT INTO events ${sql(events)}
                     ON CONFLICT (match_id, event_index)

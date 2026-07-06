@@ -12,6 +12,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 import * as controllers from './services/controllers.js';
+import { initLiveService } from './services/live.js';
 
 app.get('/api/groups', controllers.getGroups);
 
@@ -25,6 +26,16 @@ app.get('/api/last', controllers.getLastMatch);
 
 app.get('/api/picks', controllers.getPicks);
 
-app.listen(port, () => {
-    console.log(`App listening on port ${port}`)
+app.get('/api/latest', controllers.getLatestMatch);
+
+async function start() {
+    await initLiveService();
+    app.listen(port, () => {
+        console.log(`App listening on port ${port}`)
+    });
+}
+
+start().catch(err => {
+    console.error('Error during server startup:', err);
+    process.exit(1);
 });

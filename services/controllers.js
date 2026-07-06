@@ -1,6 +1,30 @@
 import sql from './db.js';
+import { getLiveState, liveEmitter } from './live.js';
 
 const PICK_REFRESH_TIME = parseInt(process.env.PICK_REFRESH_TIME, 10);
+const HEARTBEAT_TIME = 40 * 1000;
+
+function packageMatch(row, homeEvents = [], awayEvents = []) {
+    return {
+                date: row.timestamp.valueOf(),
+                number: row.number,
+                round: row.round,
+                status: row.status,
+                elapsed: row.elapsed_time,
+                extra: row.extra_elapsed_time,
+                winnerID: row.winner_id,
+                homeID: row.home_id,
+                awayID: row.away_id,
+                homeScore: row.home_score ?? 0,
+                awayScore: row.away_score ?? 0,
+                homeET: row.home_et,
+                awayET: row.away_et,
+                homePen: row.home_pen,
+                awayPen: row.away_pen,
+                homeEvents: homeEvents,
+                awayEvents: awayEvents
+            };
+}
 
 async function getGroups(req, res) {
     try {
@@ -17,23 +41,9 @@ async function getKnockoutMatches(req, res) {
         const matches = {};
 
         for (const row of rows) {
-            const match = {
-                    date: row.timestamp.valueOf(),
-                    round: row.round,
-                    homeID: row.home_id,
-                    awayID: row.away_id,
-                    homeScore: row.home_score,
-                    awayScore: row.away_score,
-                    homeET: row.home_et,
-                    awayET: row.away_et,
-                    homePen: row.home_pen,
-                    awayPen: row.away_pen,
-                    winnerID: row.winner_id,
-                    status: row.status,
-                    matchNumber: row.number
-            };
+            const match = packageMatch(row);
 
-            matches[match.matchNumber] = match;
+            matches[match.number] = match;
         }
 
         res.json(matches);
@@ -54,31 +64,12 @@ async function getMatch(req, res) {
         const matches = [];
 
         for (const row of rows) {
-            const homeData = await sql`SELECT country, flag_code FROM teams WHERE id = ${row.home_id};`;
-            const home = homeData[0];
-            const awayData = await sql`SELECT country, flag_code FROM teams WHERE id = ${row.away_id};`;
-            const away = awayData[0];
-            const homeEvents = await sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.home_id} ORDER BY time, extra_time NULLS FIRST;`;
-            const awayEvents = await sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.away_id} ORDER BY time, extra_time NULLS FIRST;`;
+            const [homeEvents, awayEvents] = await Promise.all([
+                                                    sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.home_id} ORDER BY time, extra_time NULLS FIRST`,
+                                                    sql`SELECT time, extra_time, player, assist, type, detail FROM events WHERE match_id = ${row.id} AND team_id = ${row.away_id} ORDER BY time, extra_time NULLS FIRST`
+                                                ]); 
 
-            const match = {
-                date: row.timestamp.valueOf(),
-                status: row.status,
-                homeTeam: home.country,
-                awayTeam: away.country,
-                homeScore: row.home_score,
-                awayScore: row.away_score,
-                homeET: row.home_et,
-                awayET: row.away_et,
-                homePen: row.home_pen,
-                awayPen: row.away_pen,
-                homeFlagCode: home.flag_code,
-                awayFlagCode: away.flag_code,
-                homeFifaCode: home.fifa_code,
-                awayFifaCode: away.fifa_code,
-                homeEvents: homeEvents,
-                awayEvents: awayEvents
-            };
+            const match = packageMatch(row, homeEvents, awayEvents);
 
             matches.push(match);
         }
@@ -98,38 +89,63 @@ async function getStandings(req, res) {
     }
 }
 
+async function getLatestMatch(req, res) {
+    try {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+        res.write('retry: 5000\n\n');
+
+        const [matchCache, timeToNext] = getLiveState();
+
+        if (!matchCache) {
+            res.write('event: not-live\n');
+            res.write(`data: ${JSON.stringify({timeToNext: timeToNext})}\n\n`);
+            res.end();
+            return;
+        }
+
+        const initialMatch = packageMatch(matchCache.match, matchCache.home, matchCache.away);
+        res.write('event: match-update\n');
+        res.write(`data: ${JSON.stringify({matchData: initialMatch})}\n\n`);
+
+        const onMatchUpdate = (data) => {
+            const match = packageMatch(data.match, data.home, data.away);
+            res.write('event: match-update\n');
+            res.write(`data: ${JSON.stringify({matchData: match})}\n\n`);
+        }
+
+        const onMatchEnd = (data) => {
+            res.write('event: match-end\n');
+            res.write(`data: ${JSON.stringify({timeToNext: data.timeToNext})}\n\n`);
+            res.end();
+        }
+
+        const heartbeat = setInterval(() => {
+            res.write(':\n\n');
+        }, HEARTBEAT_TIME);
+
+        liveEmitter.on('update', onMatchUpdate);
+        liveEmitter.on('end', onMatchEnd);
+
+        req.on('close', () => {
+            clearInterval(heartbeat);
+            liveEmitter.off('update', onMatchUpdate);
+            liveEmitter.off('end', onMatchEnd);
+            res.end();
+        });
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 async function getLastMatch(req, res) {
     try {
-        const lastData = await sql`SELECT * FROM matches WHERE complete = TRUE ORDER BY timestamp DESC LIMIT 1;`;
-        const last = lastData[0];
-        const home_id = last.home_id;
-        const away_id = last.away_id;
-        const homeData = await sql`SELECT country, flag_code, fifa_code FROM teams WHERE id=${home_id}`;
-        const awayData = await sql`SELECT country, flag_code, fifa_code FROM teams WHERE id=${away_id}`;
-        const home = homeData[0];
-        const away = awayData[0];
-
-        const winner = (last.winner_id === home_id) ? 'home' : (last.winner_id === away_id) ? 'away' : 'draw';
-
-        const match = {
-                date: last.timestamp.valueOf(),
-                status: last.status,
-                winner: winner,
-                homeTeam: home.country,
-                awayTeam: away.country,
-                homeScore: last.home_score,
-                awayScore: last.away_score,
-                homeET: last.home_et,
-                awayET: last.away_et,
-                homePen: last.home_pen,
-                awayPen: last.away_pen,
-                homeFlagCode: home.flag_code,
-                awayFlagCode: away.flag_code,
-                homeFifaCode: home.fifa_code,
-                awayFifaCode: away.fifa_code,
-                homeEvents: [],
-                awayEvents: []
-            };
+        const [last] = await sql`SELECT * FROM matches WHERE complete = TRUE ORDER BY timestamp DESC LIMIT 1;`;
+        const match = packageMatch(last);
 
         res.json(match);
     } catch (err) {
@@ -164,4 +180,5 @@ async function getPicks(req, res) {
         console.error(err);
     }
 }
-export { getGroups, getMatch, getStandings, getKnockoutMatches, getLastMatch, getPicks };
+
+export { getGroups, getMatch, getStandings, getKnockoutMatches, getLastMatch, getPicks, getLatestMatch };
