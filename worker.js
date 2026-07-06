@@ -70,7 +70,6 @@ async function trackMatch([job]) {
                 await boss.send('track-match', data, { startAfter: timeString, singletonKey: `match-${id}` });
             }
         } else {
-            await sql.notify('live', '0');
             await boss.send('calculate-points', { id: id, round: match.round });
         }
     } catch (err) {
