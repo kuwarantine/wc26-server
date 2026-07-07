@@ -290,6 +290,8 @@ export async function updateMatch(id) {
     await pushMatchData([match]);
     await pushEvents(events);
 
+    if (match.complete) { updateNextMatch([match]) }
+
     return match;
 }
 
