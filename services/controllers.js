@@ -4,6 +4,10 @@ import { getLiveState, liveEmitter } from './live.js';
 const PICK_REFRESH_TIME = parseInt(process.env.PICK_REFRESH_TIME, 10);
 const HEARTBEAT_TIME = 40 * 1000;
 
+const QF_START = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 8, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
+const QF_END = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 12, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
+const SF_END = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 16, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
+
 function packageMatch(row, homeEvents = [], awayEvents = []) {
     return {
                 date: row.timestamp.valueOf(),
@@ -24,6 +28,13 @@ function packageMatch(row, homeEvents = [], awayEvents = []) {
                 homeEvents: homeEvents,
                 awayEvents: awayEvents
             };
+}
+
+function timeNowIsBetween(start, end) {
+    const now = Temporal.Now.zonedDateTimeISO('UTC');
+    const isBetween = Temporal.ZonedDateTime.compare(start, now) <= 0 &&
+        Temporal.ZonedDateTime.compare(now, end) <= 0;
+    return isBetween;
 }
 
 async function getGroups(req, res) {
@@ -157,11 +168,22 @@ async function getLastMatch(req, res) {
 async function getPicks(req, res) {
     const date = req.query.date;
     const zone = req.query.zone;
-    try {
-        const startDay = Temporal.Now.zonedDateTimeISO('UTC').subtract({hours: PICK_REFRESH_TIME}).toPlainDate();
-        const startUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).toInstant().toString();
-        const endUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).add({days: 1}).toInstant().toString();
 
+    try {
+        let startUTC, endUTC;
+
+        if (timeNowIsBetween(QF_START, QF_END)) {
+            startUTC = QF_START.toInstant().toString();
+            endUTC = QF_END.toInstant().toString();
+        } else if (timeNowIsBetween(QF_END, SF_END)) {
+            startUTC = QF_END.toInstant().toString();
+            endUTC = SF_END.toInstant().toString();
+        } else {
+            const startDay = Temporal.Now.zonedDateTimeISO('UTC').subtract({hours: PICK_REFRESH_TIME}).toPlainDate();
+            startUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).toInstant().toString();
+            endUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).add({days: 1}).toInstant().toString();
+        }
+        
         const rows = await sql`SELECT id, home_id, away_id FROM matches WHERE timestamp >= ${startUTC} AND timestamp < ${endUTC} ORDER BY timestamp;`;
         const ids = rows.map((r) => r.id);
         const picks = await sql`SELECT u.name, p.match_id, p.winner_id, p.home_score, p.away_score, p.home_et, p.away_et, p.home_pen, p.away_pen
