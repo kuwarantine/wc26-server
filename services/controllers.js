@@ -7,6 +7,7 @@ const HEARTBEAT_TIME = 40 * 1000;
 const QF_START = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 8, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
 const QF_END = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 12, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
 const SF_END = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 16, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
+const F_END = Temporal.ZonedDateTime.from({year: 2026, month: 7, day: 20, hour: PICK_REFRESH_TIME, timeZone: 'UTC'});
 
 function packageMatch(row, homeEvents = [], awayEvents = []) {
     return {
@@ -178,6 +179,9 @@ async function getPicks(req, res) {
         } else if (timeNowIsBetween(QF_END, SF_END)) {
             startUTC = QF_END.toInstant().toString();
             endUTC = SF_END.toInstant().toString();
+        } else if (timeNowIsBetween(SF_END, F_END)) {
+            startUTC = SF_END.toInstant().toString();
+            endUTC = F_END.toInstant().toString();
         } else {
             const startDay = Temporal.Now.zonedDateTimeISO('UTC').subtract({hours: PICK_REFRESH_TIME}).toPlainDate();
             startUTC = startDay.toZonedDateTime({timeZone: 'UTC', plainTime: {hour: PICK_REFRESH_TIME}}).toInstant().toString();
