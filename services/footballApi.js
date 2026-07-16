@@ -148,7 +148,7 @@ function parseFixture(match) {
     const timestamp = Temporal.Instant.fromEpochMilliseconds(match.fixture.timestamp * 1000).toString();
     const home_id = match.teams.home.id;
     const away_id = match.teams.away.id;
-    const round = roundIDFromString(match.league.round);
+    const round = roundIDFromString(match.league.round) ?? 0;
     const complete = match.fixture.status.long === 'Match Finished';
     const status = match.fixture.status.short;
     const elapsed_time = match.fixture.status.elapsed;

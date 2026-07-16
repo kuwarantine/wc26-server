@@ -346,7 +346,7 @@ export async function pullNewFixturesForRound(round) {
 
 export async function pullNewFixturesFromDate(date) {
     const matches = await getUpcomingFixturesFromDate(date);
-    const matchesArray = matches.map((m) => [m.id, m.timestamp, m.home_id, m.away_id, m.round]);
+    const matchesArray = matches.filter((m) => m.round > 0).map((m) => [m.id, m.timestamp, m.home_id, m.away_id, m.round]);
 
     if (matches.length > 0) {
         const addedMatches = await sql`
